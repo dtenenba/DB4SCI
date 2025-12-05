@@ -1,0 +1,577 @@
+import json
+import os
+import subprocess
+import time
+
+import mariadb
+from docker.types import ConfigReference
+from jinja2 import Template
+
+from mydb import migrate_db
+
+from . import (
+    admin_db,
+    aws_util,
+    mydb_actions,
+    mydb_config,
+    swarm_util,
+    touched,
+)
+from .send_mail import send_mail
+
+"""
+TLS tutorial: https://www.cyberciti.biz/faq/how-to-setup-mariadb-ssl-and-secure-connections-from-clients/
+"""
+
+dbengine = "MariaDB"
+FiftyGB = 53687091200
+
+
+def auth_mariadb(dbuser, dbpass, port):
+    """
+    Check if <dbuser> account is authorized user.
+    :type dbuser: basestring
+    :type dbpass: basestring
+    :type port: basestring
+    :returns  True/False
+    """
+    iport = int(port)
+    try:
+        conn = mariadb.connect(
+            host=mydb_config.container_host, port=iport, user=dbuser, password=dbpass
+        )
+    except mariadb.Error as e:
+        print("ERROR: auth_mariadb: %s" % e)
+        return False
+    conn.close()
+    return True
+
+
+def mariadb_audit(Info):
+    """Comprehensive audit of a MariaDB instance
+
+    Args:
+        Info: Dictionary from database JSONB field containing container metadata
+              Expected keys: Port, dbuser, dbuserpass (or MARIADB_USER, DB_USER)
+
+    Lists:
+    1. All users/accounts
+    2. All databases (excluding system databases)
+    3. All tables in each database
+    4. Row count for each table
+
+    Returns: formatted audit report string
+    """
+    report = []
+    report.append("=" * 80)
+    report.append(f"MariaDB Audit Report")
+    report.append(f"Container: {Info.get('Name', 'unknown')}")
+    report.append(f"Host: {mydb_config.container_host}")
+    report.append(f"Port: {Info['Port']}")
+    report.append("=" * 80)
+    report.append("")
+
+    try:
+        # Connect to MariaDB as root/admin user
+        admin_user = mydb_config.accounts[dbengine]["admin"]
+        admin_pass = mydb_config.accounts[dbengine]["admin_pass"]
+
+        conn = mariadb.connect(
+            host=mydb_config.container_host,
+            port=int(Info["Port"]),
+            user=admin_user,
+            password=admin_pass,
+        )
+        cur = conn.cursor()
+
+        # 1. List all users
+        report.append("USERS AND ACCOUNTS:")
+        report.append("-" * 80)
+        cur.execute("""
+            SELECT User, Host,
+                   IF(Super_priv='Y', 'True', 'False') as SuperUser,
+                   IF(Create_priv='Y', 'True', 'False') as CreatePriv,
+                   IF(Grant_priv='Y', 'True', 'False') as GrantPriv
+            FROM mysql.user
+            ORDER BY User, Host
+        """)
+        users = cur.fetchall()
+        report.append(
+            f"{'User':<30} {'Host':<20} {'SuperUser':<12} {'Create':<10} {'Grant':<10}"
+        )
+        report.append("-" * 80)
+        for user in users:
+            username, host, superuser, create_priv, grant_priv = user
+            report.append(
+                f"{username:<30} {host:<20} {superuser:<12} {create_priv:<10} {grant_priv:<10}"
+            )
+        report.append("")
+
+        # 2. List all databases (show all, including system databases)
+        report.append("DATABASES:")
+        report.append("-" * 80)
+        cur.execute("""
+            SELECT schema_name
+            FROM information_schema.schemata
+            WHERE schema_name NOT IN ('information_schema', 'performance_schema')
+            ORDER BY schema_name
+        """)
+        databases = cur.fetchall()
+
+        if not databases:
+            report.append("No user databases found.")
+            report.append("")
+        else:
+            for db_row in databases:
+                dbname = db_row[0]
+                report.append(f"\nDatabase: {dbname}")
+                report.append("-" * 80)
+
+                # 3. List all tables in this database
+                cur.execute(
+                    """
+                    SELECT table_schema, table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = %s
+                    AND table_type = 'BASE TABLE'
+                    ORDER BY table_name
+                """,
+                    (dbname,),
+                )
+                tables = cur.fetchall()
+
+                if not tables:
+                    report.append(f"  No tables found in database '{dbname}'")
+                else:
+                    report.append(f"{'Database':<30} {'Table':<40} {'Row Count':<15}")
+                    report.append("-" * 80)
+
+                    # 4. Get row count for each table
+                    for table_row in tables:
+                        schema, tablename = table_row
+                        try:
+                            # Use COUNT(*) to get row count
+                            count_query = (
+                                f"SELECT COUNT(*) FROM `{schema}`.`{tablename}`"
+                            )
+                            cur.execute(count_query)
+                            row_count = cur.fetchone()[0]
+                            report.append(
+                                f"{schema:<30} {tablename:<40} {row_count:<15,}"
+                            )
+                        except mariadb.Error as e:
+                            report.append(
+                                f"{schema:<30} {tablename:<40} {'ERROR: ' + str(e):<15}"
+                            )
+
+        cur.close()
+        conn.close()
+
+        report.append("")
+        report.append("=" * 80)
+        report.append("Audit Complete")
+        report.append("=" * 80)
+
+    except mariadb.Error as e:
+        error_msg = f"ERROR: mariadb_audit failed: {e}"
+        print(error_msg)
+        report.append("")
+        report.append(error_msg)
+        return "\n".join(report)
+    except Exception as e:
+        error_msg = f"ERROR: mariadb_audit unexpected error: {e}"
+        print(error_msg)
+        report.append("")
+        report.append(error_msg)
+        return "\n".join(report)
+
+    return "\n".join(report)
+
+
+def create_init_script(params):
+    """create MariaDB init script to create user account and default database
+
+    MariaDB initialization scripts in /docker-entrypoint-initdb.d/ are executed
+    automatically when the container starts for the first time (when data directory is empty).
+    """
+
+    sql_init_script = """-- Create Database
+CREATE DATABASE IF NOT EXISTS `{{dbname}}`;
+
+-- Create User
+CREATE USER IF NOT EXISTS '{{dbuser}}'@'%' IDENTIFIED BY '{{dbuserpass}}';
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON `{{dbname}}`.* TO '{{dbuser}}'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+"""
+
+    template = Template(sql_init_script)
+    rendered_output = template.render(params)
+    params["config_name"] = f"mydb_{params['Name']}_init.sql"
+    target_path = "/docker-entrypoint-initdb.d/init.sql"
+    return swarm_util.create_config(params, rendered_output, target_path)
+
+
+def maria_env() -> list:
+    """create MariaDB Env
+    Sets up the root (admin) user credentials that MyDB uses for backups and management
+    """
+    env = [
+        f"MARIADB_ROOT_PASSWORD={mydb_config.accounts[dbengine]['admin_pass']}",
+        f"MARIADB_USER={mydb_config.accounts[dbengine]['admin']}",
+        f"TZ={mydb_config.TZ}",
+    ]
+    return env
+
+
+def build_params_mariadb(info) -> dict:
+    """Use the container metadata from version 1 of mydb to create a params dict
+    This is only required for `migrate`.
+    Args:
+        info (dict): Container metadata from V1
+    Returns:
+        dict: Service configuration parameters
+    """
+    params = {}
+    params["dbengine"] = info["dbengine"]
+    params["image"] = mydb_config.info[dbengine]["images"][0][1]
+    params["default_port"] = mydb_config.info[dbengine]["default_port"]
+    params["service_user"] = mydb_config.info[dbengine]["service_user"]
+    params["dbname"] = info["Name"]
+    params["Name"] = info["Name"]
+
+    if "DB_USER" in info:
+        params["dbuser"] = info["DB_USER"]
+    elif "MARIADB_USER" in info:
+        params["dbuser"] = info["MARIADB_USER"]
+    else:
+        params["dbuser"] = "admin"  # Default user if not found
+
+    # MariaDB V1 metadata doesn't include user password field
+    # Set temporary password - real password will be restored from backup
+    params["dbuserpass"] = "changeme@25"
+
+    params["Port"] = info["Port"]
+
+    # Environment
+    params["env"] = maria_env()
+
+    params["labels"] = {
+        "Name": params["Name"],
+        "DBaaS": "True",
+        "backup_freq": info.get("BACKUP_FREQ", ""),
+        "contact": info.get("CONTACT", ""),
+        "username": params["dbuser"],
+        "dbname": params["dbname"],
+        "dbuser": params["dbuser"],
+        "dbuserpass": params["dbuserpass"],
+        "description": info.get("DESCRIPTION", ""),
+        "owner": info.get("OWNER", ""),
+        "touched": touched.create_date_string(),
+    }
+    return params
+
+
+def migrate(info):
+    """migrate MariaDB container from V1 mydb
+    Use meta data from v1 of mydb to create new docker swarm service
+
+    Args:
+        info (dict): Container metadata from V1
+    Returns:
+        str: Result message
+    """
+    dbname = info["Name"]
+    service_name = f"mydb_{dbname}"
+
+    if swarm_util.service_exists(service_name):
+        return f"Service name {service_name} already in use"
+
+    volume_name = f"mydb_{dbname}"
+    volume_id, error = swarm_util.create_docker_volume(volume_name)
+    if error:
+        return f"Error creating docker volume {volume_name}. Error: {error}"
+
+    params = build_params_mariadb(info)
+    params["service_name"] = service_name
+    params["volume_name"] = volume_name
+
+    S3_prefix = migrate_db.lastbackup_s3_prefix(dbname)
+
+    config_ref = create_init_script(params)
+    if config_ref is None:
+        return "Error: creating Docker Config"
+
+    service, error = swarm_util.start_service(params, config_ref)
+    if service is None:
+        return f"{error} {mydb_config.supportOrganization} has been notified"
+
+    params["Start Mesg"] = f"Started! Service_id: {service.id}"
+    params["service_id"] = service.id
+    meta_data = json.dumps(params, indent=4)
+    print(meta_data)
+
+    result = mariadb_restore(params, params, S3_prefix)
+    print(f"==== DEBUG: mariadb_util.migrate: {dbname}\n{result}")
+    return result
+
+
+def create(params):
+    """
+    Create MariaDB Docker service.
+    Called from mydb_views
+    params is created from general_form UI
+
+    :param params: dict
+    :return: Help message for end user
+    """
+    data = json.dumps(params, indent=4)
+    print(f"DEBUG: mariadb_util.create: params before: {data}")
+
+    params["service_name"] = f"mydb_{params['Name']}"
+    params["volume_name"] = f"mydb_{params['Name']}"
+
+    if swarm_util.service_exists(params["service_name"]):
+        return f"Service name {params['service_name']} already in use"
+
+    volume_id, error = swarm_util.create_docker_volume(params["volume_name"])
+    if error:
+        return f"Error creating docker volume {params['volume_name']}. Error: {error}"
+
+    config_ref = create_init_script(params)
+    if config_ref is None:
+        return "Error: creating Docker Config"
+
+    config_data = mydb_config.info[params["dbengine"]]
+    params["mapped_db_vol"] = config_data["mapped_volume"]
+    params["default_port"] = config_data["default_port"]
+    params["service_user"] = config_data["service_user"]  # 'root'
+    params["Port"] = admin_db.get_max_port()
+    params["env"] = maria_env()
+
+    params["labels"] = {}
+    for label in mydb_config.mydb_v1_meta_data:
+        params["labels"][label] = params[label]
+    params["labels"]["touched"] = touched.create_date_string()
+
+    service, error = swarm_util.start_service(params, config_ref)
+    if service is None:
+        return f"{error} {mydb_config.supportOrganization} has been notified"
+
+    res = "Your MariaDB database server has been created. Use the following command "
+    res += "to connect from the Linux command line.\n\n"
+    res += f"mariadb -h {mydb_config.container_host} "
+    res += f"-P {params['Port']} -D {params['dbname']} "
+    res += f"-u {params['dbuser']} -p\n\n"
+    res += "You will be prompted to enter your password.\n\n"
+    res += "Alternatively, you can use the mariadb client:\n"
+    res += f"mariadb -h {mydb_config.container_host} "
+    res += f"-P {params['Port']} -D {params['dbname']} "
+    res += f"-u {params['dbuser']} -p\n\n"
+
+    message = (
+        f"MyDB created a new {dbengine} database called: {params['service_name']}\n"
+    )
+    message += f"Created by: {params['owner']} <{params['contact']}>\n"
+    send_mail(f"MyDB: created {dbengine}", message, mydb_config.supportAdmin)
+    return res
+
+
+def backup(info, backup_type):
+    """Backup all databases for a given MariaDB container
+    mariadb-dump is run from the dbaas container and piped to S3
+    """
+    Name = info["Name"]
+    backup_id, prefix = mydb_actions.create_backup_prefix(Name)
+
+    aws_bucket = mydb_config.AWS_BUCKET_NAME
+    s3_url = f"{aws_bucket}{prefix}{Name}.sql"
+
+    s3_filename = s3_url + "/dump_" + backup_id + ".sql"
+
+    # MariaDB Dump to S3 Backups
+    command = [
+        "mariadb-dump",
+        "-h",
+        f"{mydb_config.container_host}",
+        "-P",
+        f"{info['Port']}",
+        "-u",
+        "root",
+        f"-p{mydb_config.accounts[dbengine]['admin_pass']}",
+        "--single-transaction",
+        "--all-databases",
+    ]
+
+    s3_cmd = ["aws", "--only-show-errors", "s3", "cp", "-", s3_url]
+
+    command_str = " ".join(command)
+    safe_command = command_str.replace(
+        mydb_config.accounts[dbengine]["admin_pass"], "xxxxx"
+    )
+    # Log backup start
+    admin_db.backup_log(
+        info["cid"],
+        Name,
+        "start",
+        backup_id,
+        backup_type,
+        url=s3_url,
+        command=safe_command,
+        err_msg="",
+    )
+
+    print(f"DEBUG: mariadb-dump command: {safe_command}")
+    print(f"DEBUG: mariadb-dump AWS cmd: {s3_cmd}")
+
+    try:
+        p1 = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p2 = subprocess.Popen(
+            s3_cmd,
+            stdin=p1.stdout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        p1.stdout.close()  # Allow p1 to receive SIGPIPE if p2 exits
+        (processed, err) = p2.communicate()
+
+        if p2.returncode != 0 or (err and len(err) > 0):
+            message = f"MariaDB Backup error. Container: {Name}\n"
+            message += f"Error message: {err.decode() if err else 'Unknown error'}\n"
+            print(message)
+            send_mail("MyDB: MariaDB backup error", message, mydb_config.supportAdmin)
+        else:
+            message = "\nExecuted MariaDB dump command:\n    "
+            message += safe_command
+            message += f"\nDump file: {s3_url}\n\n"
+            message += "Backup completed successfully.\n"
+    except Exception as e:
+        message = f"MariaDB Backup exception. Container: {Name}\n"
+        message += f"Exception: {str(e)}\n"
+        print(f"DEBUG: mariadb_util.backup Error: {message}")
+        send_mail("MyDB: MariaDB backup exception", message, mydb_config.supportAdmin)
+    admin_db.backup_log(
+        info["cid"],
+        Name,
+        "end",
+        backup_id,
+        backup_type,
+        url=s3_filename,
+        command=safe_command,
+        err_msg=message,
+    )
+
+    return message
+
+
+def wait_for_mariadb(port, timeout=60):
+    """Wait for MariaDB to be ready to accept connections
+
+    Args:
+        port: Port number where MariaDB is listening
+        timeout: Maximum seconds to wait (default 60)
+
+    Returns:
+        bool: True if MariaDB is ready, False if timeout
+    """
+    admin_user = mydb_config.accounts[dbengine]["admin"]
+    admin_pass = mydb_config.accounts[dbengine]["admin_pass"]
+
+    print(f"DEBUG: Waiting for MariaDB on port {port} to be ready...")
+    start_time = time.time()
+
+    while (time.time() - start_time) < timeout:
+        status = auth_mariadb(admin_user, admin_pass, port)
+        if status:
+            return True
+        time.sleep(2)
+
+    print(f"ERROR: MariaDB failed to become ready after {timeout} seconds")
+    return False
+
+
+def restore(info):
+    """called from UI -mydb_actions"""
+    S3_prefix = migrate_db.lastbackup_s3_prefix(info["Name"])
+    params = build_params_mariadb(info)
+    result = mariadb_restore(params, params, S3_prefix)
+    return result
+
+
+def mariadb_restore(source, dest, S3_prefix):
+    """Restore MariaDB database from S3
+    <source> and <dest> are container data structures: like `params`
+
+    Args:
+        source: Source container params
+        dest: Destination container params
+        S3_prefix: S3 prefix path for backup files
+
+    Returns:
+        str: Result messages from restore operations
+    """
+    # Wait for MariaDB to be ready to accept connections
+    if not wait_for_mariadb(dest["Port"], timeout=120):
+        return "ERROR: MariaDB service did not become ready in time. Restore aborted."
+
+    # Get backup files from S3
+    backup_files = aws_util.list_s3_files(S3_prefix)
+    print(f"DEBUG: backup file list: {backup_files}")
+
+    result_msg = ""
+    SQL_file = None
+
+    # Find the SQL dump file
+    for sql_file in backup_files:
+        if ".sql" == sql_file[-4:]:
+            SQL_file = sql_file
+            break
+
+    if not SQL_file:
+        return "Could not find a SQL file for MariaDB recovery. This is bad."
+
+    # Build restore command
+    # Don't specify a database - the dump file contains CREATE DATABASE statements
+    maria_cmd = f"mariadb -h {mydb_config.container_host} "
+    maria_cmd += f"-P {dest['Port']} "
+    maria_cmd += f"-u {mydb_config.accounts[dbengine]['admin']} "
+    maria_cmd += f"-p{mydb_config.accounts[dbengine]['admin_pass']}"
+
+    restore_cmd = f"aws s3 cp {SQL_file} - | {maria_cmd}"
+    print(
+        f"DEBUG: restore SQL file: {restore_cmd.replace(mydb_config.accounts[dbengine]['admin_pass'], 'xxxxx')}"
+    )
+
+    base_sql = os.path.basename(SQL_file)
+
+    try:
+        result = subprocess.run(
+            restore_cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=1800,  # 30 minute timeout
+        )
+        if result.returncode != 0:
+            error_msg = f"Error restoring SQL file: {result.stderr}"
+            print(f"ERROR: {error_msg}")
+            if result.stdout:
+                print(f"STDOUT: {result.stdout}")
+            result_msg += error_msg
+            result_msg += f"\nSTDOUT: {result.stdout}\n" if result.stdout else ""
+        else:
+            result_msg += f"SQL file {base_sql} restored successfully\n"
+            if result.stdout:
+                result_msg += f"{result.stdout}\n"
+            if result.stderr:
+                result_msg += f"Warnings: {result.stderr}\n"
+
+    except subprocess.TimeoutExpired:
+        return "SQL file restore timed out after 1800 seconds.\nRestore incomplete"
+    except Exception as e:
+        return f"Unexpected error restoring SQL file: {e}"
+
+    result_msg += "Database restore completed from S3."
+    print(f"DEBUG: maria_retore: result: {result_msg}")
+    return result_msg
