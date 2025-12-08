@@ -1,0 +1,132 @@
+# MyDB Environment Variables Configuration
+# Copy this file to .env and configure with your actual values
+# cp env_example .env
+
+# =============================================================================
+# Support and Notifications
+# =============================================================================
+
+# Email address for administrative notifications and alerts
+supportAdmin="admin@example.org"
+
+# =============================================================================
+# Flask Application Settings
+# =============================================================================
+
+# Enable Flask debug mode (1=enabled, 0=disabled)
+# WARNING: Set to 0 in production environments
+FLASK_DEBUG=0
+
+# Flask secret key for session encryption
+# Generate a strong random key: python -c 'import secrets; print(secrets.token_urlsafe(32))'
+FLASK_SECRET='CHANGE_ME_TO_A_RANDOM_SECRET_KEY'
+
+# =============================================================================
+# PostgreSQL Admin Database Credentials
+# =============================================================================
+
+# MyDB admin database user (for production admin database)
+MYDB_ADMIN_USER='mydbadmin'
+
+# MyDB admin database password (for production admin database)
+MYDB_ADMIN_PASSWORD='CHANGE_ME_ADMIN_PASSWORD'
+
+# MyDB migrate database password (for migration/staging database)
+MYDB_MIGRATE_PASSWORD='CHANGE_ME_MIGRATE_PASSWORD'
+
+# =============================================================================
+# SQLAlchemy Database Connection Strings
+# =============================================================================
+
+# Production admin database connection
+# Format: postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
+# Note: URL-encode special characters in password (e.g., @ becomes %40)
+SQLALCHEMY_ADMIN_URI="postgresql+psycopg://mydbadmin:CHANGE_ME_ADMIN_PASSWORD@db-host.example.org:5432/mydb_admin"
+
+# Migration/staging database connection (optional)
+# Used for migrating databases from v1 to v2 or cross-environment operations
+SQLALCHEMY_MIGRATE_URI="postgresql+psycopg://mydbadmin:CHANGE_ME_MIGRATE_PASSWORD@migrate-host.example.org:5432/mydb_migrate"
+
+# =============================================================================
+# MyDB Container Host Configuration
+# =============================================================================
+
+# Environment identifier (dev, staging, prod)
+DBAAS_ENV='prod'
+
+# Hostname where MyDB and database containers run
+# This is the publicly accessible hostname that users will connect to
+DBAAS_HOST=mydb-host
+
+# Domain name for the MyDB host
+DBAAS_DOMAIN=example.org
+
+# =============================================================================
+# Active Directory / LDAP Authentication
+# =============================================================================
+
+# Active Directory server hostname or IP
+ADServer=dc.example.org
+
+# Active Directory domain
+ADDomain=example.org
+
+# LDAP search base for user lookups
+# Format: dc=domain,dc=tld (e.g., "dc=example,dc=org")
+ADSearchBase="dc=example,dc=org"
+
+# =============================================================================
+# AWS S3 Backup Storage
+# =============================================================================
+
+# S3 bucket URL for database backups
+# Format: s3://bucket-name
+AWS_BUCKET_NAME="s3://your-org-mydb-backups"
+
+# AWS IAM credentials with S3 access
+# Required permissions: s3:PutObject, s3:GetObject, s3:ListBucket
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+
+# AWS secret access key (keep this secure!)
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+# =============================================================================
+# Email Configuration (Optional)
+# =============================================================================
+
+# SMTP server for sending email notifications
+# Uncomment and configure if different from defaults in mydb_config.py
+# MAIL_SERVER=smtp.example.org
+
+# Email sender address
+# MAIL_FROM=mydb-noreply@example.org
+
+# Additional email recipients for notifications (comma-separated)
+# MAIL_TO=dba-team@example.org,backup-alerts@example.org
+
+# =============================================================================
+# Additional Notes
+# =============================================================================
+#
+# 1. Security Best Practices:
+#    - Never commit .env to version control
+#    - Use strong, randomly generated passwords
+#    - Rotate credentials regularly
+#    - Use IAM roles instead of AWS keys when possible
+#
+# 2. Docker Secrets:
+#    After configuring .env, create Docker secrets with:
+#    ./dbaas_secrets.sh
+#
+# 3. Testing Configuration:
+#    Validate your configuration before deployment:
+#    source .env && echo "DBAAS_HOST: $DBAAS_HOST"
+#
+# 4. URL Encoding:
+#    Special characters in passwords must be URL-encoded for SQLAlchemy:
+#    @  -> %40
+#    #  -> %23
+#    /  -> %2F
+#    ?  -> %3F
+#    &  -> %26
+#

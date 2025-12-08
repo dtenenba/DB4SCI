@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+{% block title %} Created DB- {% endblock %}
+{% block head %} {{ super() }}{% endblock %}
+{% block content %}
+        <div id="container">
+            <div class="title">
+                <h4>Created DB Container</h4>
+            </div>
+            <div id="content">
+                DB/Container name: <strong>{{dbname}}</strong><br />
+                DB Username: <strong>{{dbuser}}</strong> <br />
+                Owner:  <strong>{{owner}}</strong><br />
+                Contact: <strong>{{contact}}</strong><br />
+                Description: <strong>{{description}}</strong> <br />
+                Application Name:  <strong>{{app_name}}</strong><br />
+                Backup Frequency:  <strong>{{backup_freq}}</strong><br />
+                {# Phi:  <strong>{{phi}}</strong><br /> #}
+            </div>
+            <div class="title">
+                <h4>Command Output</h4>
+            </div>
+                <code><pre>
+{{result}}
+                </pre></code>
+        </div>
+{% endblock %}

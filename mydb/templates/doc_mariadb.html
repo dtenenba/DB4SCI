@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block title %} Documentation- {% endblock %}
+{% block head %} {{ super() }}{% endblock %}
+{% block content %}
+<div id="container">
+  <div class="title">
+    <h4>MariaDB Documentation</h4>
+  </div>
+  <div class="document">
+    <h2>Mariadb Notes</h2>
+    If you want to tune your database you can change almost all of the configuration settings in
+    postgresql.conf via ALTER SYSTEM commands (e.g., ALTER SYSTEM SET max_connections=100)
+    After making any changes, you must restart the database server through the "Restart DB Service"
+    link. </p>
+
+    <h2>Users</h2>
+    Use psql to connect to the database via the following command: <p>
+    <code>mariadb --host=<i>mydb</i> --user=<i>username</i> --port <i>portnum</i> -D <i>database</i> </code>
+    <p>
+    The port number is provided when you first create the database instance.
+    You can issue any psql command from here, including create role, grant, create database, alter system.
+    Your database account has superuser rights on your database instance. We do not recommend 
+    that you use your login account or password for database accounts. 
+
+    <h2>From Linux</h2>
+    Since Version 11.7 the mysql commands are depricated. Use mariadb and mariadb-dump from the
+    Linux command line. 
+    From Linux load a MariaDB Module to have access to mariadb and other MariaDB commands.
+    This loads the entire MariaDB client code base.
+    <code>module load MariaDB/11.8.3-GCC-14.2.0</code>
+
+    <h2>Postgres Commands</h2> 
+    <code>
+       SHOW DATABASES;<br>
+       SHOW TABLES FROM `database_name`;<br>
+       DROP DATABASE IF EXISTS bufg;<br>
+       \q  Disconnect.<br>
+    </code>
+
+    
+  </div> <!-- end class document -->
+</div> <!-- end id container -->
+    {% endblock %}
+  </body>
+</html>
+

@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+  <head>
+    {% block head %}
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" type=text/css href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" type=text/css href="{{ url_for('static', filename='css/nav.css') }}">
+    <title>{% block title %}{% endblock %} DB4Sci </title>
+    {% endblock %}
+  </head>
+  <body>
+     {% include 'banner.html' %}
+       <nav>
+       <ul class="nav">
+         <li><a href='#'>Manage Services</a>
+            <ul> 
+              <li><a href="{{ url_for('list_containers') }}">List Docker Services</a></li>
+              <li><a href="{{ url_for('select_with_auth', dbaction='restart') }}">Restart DB Service</a></li>
+              <li><a href="{{ url_for('select_with_auth', dbaction='delete') }}">Delete Service</a></li>
+              <li><a href="{{ url_for('select_container', dbaction='list_s3') }}">List S3 Backups</a></li>
+              <li><a href="{{ url_for('select_container', dbaction='backup') }}">Backup Database</a></li>
+            </ul>
+         </li> <!-- end Manage -->
+         <li><a href='#'>Create DB Service</a>
+           <ul> 
+             <li><a href="{{ url_for('create_form', dbengine='Postgres') }}">PostgreSQL</a></li>
+             <li><a href="{{ url_for('create_form', dbengine='MariaDB') }}">MariaDB (MySQL)</a></li>
+             <li><a href="{{ url_for('create_form', dbengine='MongoDB') }}">MongoDB</a></li>
+             <!-- <li><a href="{{ url_for('create_form', dbengine='Neo4j') }}">Neo4j</a></li> -->
+           </ul>
+         </li> <!-- end Create-->
+         {% if session['admin_user'] == true %}
+         <li><a href='#'>Admin</a>
+            <ul> 
+              <li><a href="{{ url_for('admin', cmd='help') }}">Admin Help</a></li>
+              <li><a href="{{ url_for('admin', cmd='debug') }}">Show Session Info</a></li>
+              <li><a href="{{ url_for('select_container', dbaction='restore') }}">Restore From S3 Backup</a></li>
+              <li><a href="{{ url_for('select_container', dbaction='admin_metadata') }}">Service Meta Data</a></li>
+              <li><a href="{{ url_for('select_container', dbaction='audit_db') }}">Audit DB</a></li>
+              <li><a href="{{ url_for('select_container', dbaction='connection') }}">Connection CLI</a></li>
+              <li><a href="{{ url_for('admin', cmd='backup_audit') }}">Backup Audit</a></li>
+              <li><a href="{{ url_for('admin', cmd='services') }}">List Docker Services</a></li>
+              <li><a href="{{ url_for('admin', cmd='volume_list') }}">List Docker Volumes</a></li>
+              <li><a href="{{ url_for('select_container', dbaction='remove') }}">Remove Service</a></li>
+            </ul>
+         </li><!-- end 'Admin' -->
+         <li><a href='#'>Migrate</a>
+            <ul> 
+              <li><a href="{{ url_for('list_from_migrate') }}">List Containers from MigrateDB</a></li>
+              <li><a href="{{ url_for('select_container', dbaction='migrate_info') }}">Show Containers Meta Data</a></li>
+              <li><a href="{{ url_for('migrate_email') }}">Create Email List</a></li>
+              <li><a href="{{ url_for('select_container', dbaction='migrate') }}">Migrate Container</a></li>
+              <li><a href="{{ url_for('migrate_recover') }}">Recover Admin DB to Migrate DB</a></li>
+ 
+            </ul>
+         </li><!-- end 'Migrate' -->
+         {% endif %} <!-- End if Admin is True -->
+         <li><a href='#'>Documentation</a>
+           <ul>
+             <li><a href="{{ url_for('doc_page', doc='documentation') }}">Overview</a></li>
+             <li><a href="{{ url_for('doc_page', doc='doc_postgres') }}">PostgreSQL</a></li>
+             <li><a href="{{ url_for('doc_page', doc='doc_mariadb') }}">MariaDB</a></li>
+             <li><a href="{{ url_for('doc_page', doc='doc_backup') }}">Database Backups</a></li>
+             <li><a href="{{ url_for('doc_page', doc='doc_mariadb_ear') }}">MariaDB Encryption at Rest</a></li>
+             <li><a href="{{ url_for('doc_page', doc='doc_TLS') }}">TLS for MariaDB</a></li>
+             <li><a href="{{ url_for('doc_page', doc='doc_release') }}">Release Notes</a></li>
+           </ul>
+         </li> <!-- end Documentation-->
+         <li ><a href="{{ url_for('logout') }}">Log Out</a></li>
+       </ul>
+       </nav> <!-- end "nav" -->
+     <div id="content"> {% block content %}{% endblock %} </div>
+  </body>
+</html>

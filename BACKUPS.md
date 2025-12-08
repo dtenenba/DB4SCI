@@ -66,10 +66,6 @@ Backups are scheduled based on container metadata:
 
 Users can trigger on-demand backups through the web interface at any time.
 
-## Running Automated Backups with Docker Swarm
-
-Since MyDB now runs as a Docker Swarm service, the traditional cron-based backup approach requires adaptation.
-
 ### Recommended: External Cron Server
 
 The recommended approach is to run `backup_all.py` from an external server with cron scheduling.
@@ -187,8 +183,8 @@ Create `/etc/logrotate.d/mydb_backup`:
 
 #### Monitoring Backups
 
-The `Admin` GUI has an audit backup feature. This is implemented by writting a `start/end` backup 
-record the `backup` log table. The audit makes sure there is a `start` and `end` message for each
+The `Admin` GUI has an audit backup feature. This is implemented by writing a `start/end` backup
+record to the `backup` log table. The audit makes sure there is a `start` and `end` message for each
 database that requires backup.
 
 The next best method to inspect backup files is to look at the **AWS S3** bucket for backup files,
@@ -217,6 +213,12 @@ aws s3 cp s3://your-bucket/admin_db/mydb_admin_20250101.dump - | \
 ```
 
 **Note:** The admin database is also used for the **Migrate** feature when redeploying MyDB to a new environment or upgrading to a new version.
+
+### Restoring Users Databases
+
+Restore feature is available from the `Admin` menu. This will overwrite an
+exiting database service. Restores are always complicated. It might be best
+to create a new DB service to recover into.
 
 ## User-Initiated Backups
 
@@ -273,12 +275,12 @@ The `Admin` menu of the UI has a `Restore` feature.
 ### Backup Script Fails to Connect to Database
 
 All databases created by the service create a default `admin` account.
-This `admin` account is used for backups. Its important that it is
+This `admin` account is used for backups. It's important that it is
 not changed or removed. Use the `Connection URL` from the `Admin`
 menu to generate a connection string. Test from a server with
-the appropreate db tools (PostgreSQL, MariaDB, MongoDB) to 
+the appropriate db tools (PostgreSQL, MariaDB, MongoDB) to
 run the connection string. This is the same connection method used
-by backups. It shold work.
+by backups. It should work.
 
 ##### Test with database client
 ```

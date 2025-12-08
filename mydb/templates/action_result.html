@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% block title %} action_result {% endblock %}
+{% block head %} {{ super() }}{% endblock %}
+{% block content %}
+<div id="container">
+    <div class="title"> <h4>{{ title }}</h4> </div>
+    <div class="sub_title"> <h4> {{ header }} </h4></div>
+    <div id="content">
+    <code><pre>
+{{result}}
+    </pre></code>
+    </div> <!-- content -->
+</div> <!-- container -->
+{% endblock %}
