@@ -1,0 +1,505 @@
+::selection{ background-color: #E13300; color: white; }
+::moz-selection{ background-color: #E13300; color: white; }
+::webkit-selection{ background-color: #E13300; color: white; }
+
+:root {
+    --navy: #1B365D;
+    --bright-blue: #00ABC8;
+    --vivid-yellow: #FFB500;
+    --warm-purple: #AA4AC4;
+    --teal: #0A799A;
+}
+
+body {
+    font-family: "Calibri",Helvetica,Arial,"Lucida Grande",sans-serif;
+    color: #888;
+    font-style: normal;
+    font-size: 14px;
+    line-height: 22px;
+}
+
+a {
+    color: black;
+    background-color: transparent;
+    font-weight: normal;
+}
+
+.title {
+    font-family: "Calibri",Helvetica,Arial,"Lucida Grande",sans-serif;
+    padding: 0 20px;
+    background: lightgray;
+    position: relative;
+    height: 50px;
+    line-height: 50px;
+}
+.sub_title {
+    font-family: "Calibri",Helvetica,Arial,"Lucida Grande",sans-serif;
+    padding: 0 20px;
+    line-height: 50px;
+}
+
+.panel-title {
+    color: black;
+}
+
+.logo {
+   padding: 15px 25px 10px 15px;
+   width: 25%;
+}
+
+.logo img {
+   max-width: 100%;
+   height: auto;
+}
+
+.app_name {
+    color: var(--teal);
+    font-family: "Calibri",Helvetica,Arial,"Lucida Grande",sans-serif;
+    font-size: 1.5em;
+    margin: 0 10px .5em 20px;
+}
+
+.banner_title {
+    color: var(--navy);
+    font-size: 2em;
+    padding-left: 3em;
+}
+
+.btn-submit {
+    background: var(--teal);
+}
+
+.btn-submit:hover {
+    background: var(--bright-blue);
+}
+
+h4 {
+    margin: 0;
+}
+
+code {
+    font-family: Consolas, Monaco, Courier New, Courier, monospace;
+    font-size: 12px;
+    background-color: #f9f9f9;
+    border: 1px solid #D0D0D0;
+    color: #002166;
+    display: block;
+    padding: 0px 10px 12px 10px;
+}
+
+/*
+content {
+    padding: 5px;
+    zoom: 1;
+}
+*/
+
+#content {
+    font-family: Helvetica, Arial, "Lucida Grande", sans-serif;
+    padding: 5px;
+}
+
+code {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+div.document {
+    font-family: "Calibri",Helvetica,Arial,"Lucida Grande",sans-serif;
+    padding-top: 15px;
+    padding-bottom: 15px;
+    padding-right: 100px;
+    padding-left: 100px;
+}
+
+#body{
+    margin: 0 15px 0 15px;
+}
+
+p.footer{
+    text-align: right;
+    font-size: 11px;
+    border-top: 1px solid #D0D0D0;
+    line-height: 32px;
+    padding: 0 10px 0 10px;
+    margin: 20px 0 0 0;
+}
+
+#container{
+    /* margin: 10px; */
+    border: 1px solid #D0D0D0;
+    color: black;
+}
+
+/* Create Container Table */
+.create_table td {              /* column one */
+    text-align: right;
+    font-weight: bold;
+}
+.create_table td + td {         /* column two */
+    text-align: left;
+}
+.create_table td + td +td {     /* column three */
+    text-align: right;
+    font-weight: bold;
+}
+.create_table td + td + td +td {/* column four */
+    text-align: left;
+}
+td.linebreak p {
+    width: 50%;
+}
+
+
+/* Form Styles */
+form label{
+    display: block;
+    margin-bottom: 5px;
+}
+form input[type=text]{
+    border: 1px solid #aaa;
+    border-radius: 2px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.1);
+    box-sizing: border-box;
+    padding: 5px;
+    margin-bottom: 20px;
+    outline: 0;
+    -webkit-border-radius: 2px;
+    -moz-border-radius: 2px;
+    -webkit-box-shadow: inset 0 1px 2px rgba(0,0,0,.1);
+    -moz-box-shadow: inset 0 1px 2px rgba(0,0,0,.1);
+}
+form input[type=password]{
+    border: 1px solid #aaa;
+    border-radius: 2px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.1);
+    box-sizing: border-box;
+    padding: 5px;
+    margin-bottom: 20px;
+    outline: 0;
+    -webkit-border-radius: 2px;
+    -moz-border-radius: 2px;
+    -webkit-box-shadow: inset 0 1px 2px rgba(0,0,0,.1);
+    -moz-box-shadow: inset 0 1px 2px rgba(0,0,0,.1);
+}
+form input[type=submit]{
+    background: #198ad1;
+    color: #fff;
+    display: inline-block;
+    padding: 0 20px;
+    font-size: 16px;
+    line-height: 2.6em;
+    font-family: "Helvetica Neue",Helvetica,Arial,"Lucida Grande",sans-serif;
+    font-weight: 400;
+    -webkit-box-shadow: inset 0 -1px 0 rgba(0,0,0,.1);
+    -moz-box-shadow: inset 0 -1px 0 rgba(0,0,0,.1);
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,.1);
+    -webkit-border-radius: 2px;
+    -moz-border-radius: 2px;
+    border-radius: 2px;
+    text-transform: capitalize;
+    border: 0;
+    cursor: pointer;
+    text-align: center;
+} 
+
+
+div#loading {
+    width: 35px;
+    height: 35px;
+    display: none;
+    background: url(/static/ajax-loader.gif) no-repeat;
+    cursor: wait;
+}
+
+/* Style the list */
+ul.tab {
+    list-style-type: none;
+    margin: 15;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid #ccc;
+    background-color: #f1f1f1;
+}
+
+/* Float the list items side by side */
+ul.tab li {float: left;}
+
+/* Style the links inside the list items */
+ul.tab li a {
+    display: inline-block;
+    color: black;
+    text-align: center;
+    padding: 14px 16px;
+    text-decoration: none;
+    transition: 0.3s;
+    font-size: 17px;
+}
+
+/* Change background color of links on hover */
+ul.tab li a:hover {background-color: #ddd;}
+
+/* Create an active/current tablink class */
+ul.tab li a:focus, .active {background-color: #ccc;}
+
+/* Style the tab content */
+.tabcontent {
+    display: none;
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    border-top: none;
+}
+
+
+/* ============================================
+   Modern Form Styles (general_form_v2.html)
+   ============================================ */
+
+.form-container {
+  max-width: 900px;
+  margin: 0;
+  padding: 1rem;
+  font-family: "Calibri",Helvetica,Arial,"Lucida Grande",sans-serif;
+}
+
+.form-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.form-header h2 {
+  margin: 0;
+  color: #333;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-field label {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.form-field label .required {
+  color: #d32f2f;
+  margin-left: 2px;
+}
+
+.form-field input[type="text"],
+.form-field input[type="password"],
+.form-field input[type="email"],
+.form-field select {
+  padding: 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+}
+
+.form-section {
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.form-section:last-of-type {
+  border-bottom: none;
+}
+
+.form-section h3 {
+  margin: 0 0 1rem 0;
+  color: #444;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.form-container #loading {
+  display: none;
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.field-hint {
+  font-size: 0.85rem;
+  color: #777;
+  margin-top: 0.25rem;
+}
+
+/* Submit button styling for general_form.html */
+form button[type="submit"] {
+  background: #89c348; /* Fallback color */
+  background: var(--teal);
+  color: white;
+  padding: 1rem 3rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1.2rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-family: "Calibri",Helvetica,Arial,"Lucida Grande",sans-serif;
+}
+
+form button[type="submit"]:hover {
+  background: var(--bright-blue);
+}
+
+form button[type="submit"]:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-container {
+    padding: 1rem;
+    margin: 1rem;
+  }
+}
+
+/* ============================================
+   Login Page Styles (replaces Bootstrap)
+   ============================================ */
+
+/* Container and Grid System */
+.container {
+  max-width: 1170px;
+  margin: 0 auto;
+  padding: 0 15px;
+}
+
+.row {
+  margin: 0 -15px;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.col-md-4 {
+  width: 33.33%;
+  padding: 0 15px;
+  box-sizing: border-box;
+}
+
+.col-md-offset-4 {
+  margin-left: 33.33%;
+}
+
+/* Panel/Card Component */
+.panel {
+  margin-bottom: 20px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgba(0,0,0,.05);
+}
+
+.panel-default {
+  border-color: #ddd;
+}
+
+.panel-heading {
+  padding: 10px 15px;
+  background: var(--teal);
+  border-bottom: 1px solid #ddd;
+  border-radius: 3px 3px 0 0;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 16px;
+  color: white;
+}
+
+.panel-body {
+  padding: 15px;
+}
+
+/* Form Elements for Login */
+.login-panel .form-group {
+  margin-bottom: 15px;
+}
+
+.login-panel .form-control {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #555;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.login-panel .form-control:focus {
+  border-color: var(--teal);
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(10, 121, 154, 0.1);
+}
+
+.login-panel .checkbox {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.login-panel .checkbox label {
+  font-weight: normal;
+  color: #555;
+}
+
+/* Login Button - extends existing button styles */
+.login-panel button[type="submit"] {
+  display: block;
+  width: 100%;
+  background: var(--teal);
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.login-panel button[type="submit"]:hover {
+  background: var(--bright-blue);
+}
+
+/* Responsive adjustments for login */
+@media (max-width: 768px) {
+  .col-md-4,
+  .col-md-offset-4 {
+    width: 100%;
+    margin-left: 0;
+  }
+}
