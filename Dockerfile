@@ -18,6 +18,7 @@ RUN apt-get update -y && \
     libmariadb-dev libmariadb-dev-compat mariadb-client \
     gcc \
     vim \
+    cron \
     && rm -rf /var/lib/apt/lists/*
 
 # Create the sttrweb user and data directory
@@ -39,8 +40,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy files to container
 ENV env=prod
 ADD *.py /app
-ADD dbconfig /app
 ADD mydb /app/mydb/
+
+# Setup cron for backups
+COPY backup-cron /etc/cron.d/backup-cron
+RUN chmod 0644 /etc/cron.d/backup-cron && \
+    crontab -u dbaas /etc/cron.d/backup-cron && \
+    touch /var/log/backup_all.log && \
+    chown dbaas:dbaas /var/log/backup_all.log
 
 # Switch to the server directory and start it up
 COPY entrypoint.sh /app/

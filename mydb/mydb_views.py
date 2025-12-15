@@ -16,6 +16,7 @@ from mydb import app
 from . import (
     AD_auth,
     admin_db,
+    aws_util,
     backup_util,
     mariadb_util,
     migrate_db,
@@ -30,6 +31,19 @@ __name__ = "mydb"
 __version__ = "2.0.1"
 __release_date__ = "Oct, 2025"
 __author__ = "jfdey@fredhutch.org"
+
+
+def get_template_context():
+    """Return common context variables for all templates"""
+    return {
+        "logo_path": mydb_config.organizationLogo,
+        "org_name": mydb_config.organizationName,
+        "version": __version__,
+        "release_date": __release_date__,
+        "organizationName": mydb_config.organizationName,
+        "supportOrganization": mydb_config.supportOrganization,
+        "supportEmail": mydb_config.supportEmail,
+    }
 
 
 def auth_required(func):
@@ -49,14 +63,7 @@ def admin_required(func):
         if session.get("admin_user"):
             return func(*args, **kwargs)
         else:
-            return render_template(
-                "index.html",
-                version=__version__,
-                release_date=__release_date__,
-                organizationName=mydb_config.organizationName,
-                supportOrganization=mydb_config.supportOrganization,
-                supportEmail=mydb_config.supportEmail,
-            )
+            return render_template("index.html", **get_template_context())
 
     return decorated_function
 
@@ -65,14 +72,7 @@ def admin_required(func):
 @app.route("/index")
 def index():
     if session.get("logged_in", False):
-        return render_template(
-            "index.html",
-            version=__version__,
-            release_date=__release_date__,
-            organizationName=mydb_config.organizationName,
-            supportOrganization=mydb_config.supportOrganization,
-            supportEmail=mydb_config.supportEmail,
-        )
+        return render_template("index.html", **get_template_context())
     else:
         return redirect(url_for("login"))
 
@@ -189,7 +189,7 @@ admin_actions = [
     "admin_metadata",
     "audit_db",
     "audit_mysql",
-    "remove",
+    "delete",
     "restore",
     "connection",
     "services",
@@ -241,7 +241,7 @@ def selected():
             header=f"Backup Results for {container_name}",
         )
     elif action == "list_s3":
-        backups = mydb_actions.list_s3(container_name)
+        backups = aws_util.list_s3(container_name)
         return render_template(
             "action_result.html",
             result=backups,

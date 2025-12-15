@@ -615,10 +615,13 @@ def recover_admin_db():
         ]
     )
     print(f"DEBUG: recover_admin_db: {pg_restore}")
-    prefixs = mydb_actions.list_s3_prefixes("mydb_admin")
+    prefixs = aws_util.list_s3_prefixes("mydb_admin")
+    if len(prefixs) == 0:
+        return "No S3 backups found for mydb_admin."
     x, last_backup = prefixs[-1].split()
+    print(f"DEBUG: recover_admin_db: {aws_bucket}/prod/mydb_admin/{last_backup}")
     aws_bucket = mydb_config.AWS_BUCKET_NAME
-    S3_prefix = f"{aws_bucket}/mydb_admin/{last_backup}"
+    S3_prefix = f"{aws_bucket}/prod/mydb_admin/{last_backup}"
     backup_files = aws_util.list_s3_files(S3_prefix)
     dump_file = None
     for backup_file in backup_files:

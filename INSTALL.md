@@ -172,7 +172,18 @@ docker push your-registry/dbaas:2.0.1
 
 **Note**: Docker Swarm requires images to be available in a registry accessible from all nodes.
 
-### 6. Deploy to Docker Swarm
+### 6. Admin Databases
+
+The admin databases must be up and running before the application service can
+be started. 
+
+```bash
+  ./deploy_admin.sh
+  # verify
+  docker service ls --filter name=mydb
+```
+
+### 7. Deploy to Docker Swarm
 
 Deploy the MyDB stack:
 
@@ -186,18 +197,6 @@ Verify deployment:
 docker stack services mydb
 docker service ls | grep mydb
 ```
-
-### 7. Initialize Admin Database
-
-The admin database schema is created automatically on first startup. Verify by checking logs:
-
-```bash
-docker service logs mydb_dbaas
-```
-
-Look for messages indicating database initialization:
-- "Initialized production database"
-- "Initialized migrate database" (if configured)
 
 ## Post-Installation
 

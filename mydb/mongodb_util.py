@@ -1,33 +1,39 @@
-import errno
+import argparse
 import json
-import os
+import subprocess
 import sys
-import time
 
 from jinja2 import Template
-import pymongo
 from pymongo import MongoClient
+from pymongo.errors import (
+    ConnectionFailure,
+    OperationFailure,
+    ServerSelectionTimeoutError,
+)
+
+from mydb import migrate_db
 
 from . import (
     admin_db,
+    aws_util,
+    mydb_actions,
     mydb_config,
     swarm_util,
     touched,
 )
 
-
-def dbengine():
-    return "MongoDB"
+dbengine = "MongoDB"
 
 
-def auth_mongodb(dbuser, dbpass, port, dbname):
-    connection_string = f"mongodb://{dbuser}:{dbpass}@{mydb_config.container_host}x:{port}/{dbname}"
-    client = pymongo.MongoClient(connection_string)
+def auth_mongodb(dbuser, dbpass, port):
+    connection_string = (
+        f"mongodb://{dbuser}:{dbpass}@{mydb_config.container_host}:{port}/admin"
+    )
+    client = MongoClient(connection_string, serverSelectionTimeoutMS=5000)
     try:
-        client.admin.command('ping')
-    except (pymongo.errors.ConnectionFailure,
-        pymongo.errors.OperationFailure) as e:
-        print(f"Error connecting to MongoDB: {e}", file=sys.stderr)
+        client.admin.command("ping")
+    except (ConnectionFailure, OperationFailure, ServerSelectionTimeoutError) as e:
+        print(f"Error connecting to MongoDB. port={port} {e}", file=sys.stderr)
         return False
     client.close()
     return True
@@ -40,17 +46,20 @@ def create_init_script(params):
     automatically when the container starts for the first time (when data directory is empty).
     """
     init_user_js = """// Create the user's database and user account
-use '{{dbname}}';
+use {{dbname}};
 db.collectionName.insertOne({ message: "Hello from MyDB", dbname: "{{dbname}}" });
 
 // Create user with dbOwner role - full admin rights to this database
+use admin;
 db.createUser({
     user: '{{dbuser}}',
     pwd: '{{dbuserpass}}',
     roles: [
         {role: 'dbOwner', db: '{{dbname}}'},
         {role: "dbAdmin", db: "admin" },
-        {role: "userAdminAnyDatabase", db: "admin" } ]
+        {role: "userAdminAnyDatabase", db: "admin" },
+        {role: "readWriteAnyDatabase", db: "admin" }
+       ]
 });
 
 """
@@ -78,14 +87,155 @@ def mongo_env(dbname):
 
 
 def build_params_mongo(info):
-    """only used for migrate"""
+    """Build params dict from container metadata for migration
+
+    This is only required for `migrate`.
+    Args:
+        info (dict): Container metadata from version 1 of mydb
+    Returns:
+        dict: Service configuration parameters
+    """
     params = {}
     params["dbengine"] = info["dbengine"]
-    params["dbname"] = info["dbname"]
-    params["dbuser"] = info["dbuser"]
-    params["dbuserpass"] = info["dbuserpass"]
-    params["env"] = mongo_env(info["dbname"])
+    params["image"] = mydb_config.info[dbengine]["images"][0][1]
+    params["default_port"] = mydb_config.info[dbengine]["default_port"]
+    params["service_user"] = mydb_config.info[dbengine]["service_user"]
+    params["dbname"] = info["Name"]  # dbname is missing in V1 metadata
+    params["Name"] = info["Name"]
+    if "DB_USER" in info:
+        params["dbuser"] = info["DB_USER"]
+    else:
+        params["dbuser"] = info.get("dbuser", "admin")
+    params["Port"] = info["Port"]
+    params["env"] = mongo_env(info["Name"])
+    params["labels"] = {
+        "Name": params["Name"],
+        "DBaaS": "True",
+        "backup_freq": info["BACKUP_FREQ"],
+        "contact": info["CONTACT"],
+        "username": params["dbuser"],
+        "dbname": params["dbname"],
+        "dbuser": params["dbuser"],
+        "description": info["DESCRIPTION"],
+        "owner": info["OWNER"],
+        "touched": touched.create_date_string(),
+    }
     return params
+
+
+def migrate(info):
+    """Migrate MongoDB container from v1 to v2
+
+    Use metadata from v1 of mydb to create new docker swarm service
+    and restore data from S3 backup
+
+    Args:
+        info (dict): Container metadata from migrate_db
+    Returns:
+        str: Result message
+    """
+    import time
+
+    dbname = info["Name"]
+    if swarm_util.service_exists(dbname):
+        return f"Container name {dbname} already in use"
+
+    # Create Docker volume
+    volume_name = f"mydb_{dbname}"
+    volume_id, error = swarm_util.create_docker_volume(volume_name)
+    if error:
+        return f"Error creating docker volume {volume_name}. Error: {error}"
+
+    # Build params from v1 metadata
+    params = build_params_mongo(info)
+    params["service_name"] = f"mydb_{dbname}"
+    params["volume_name"] = volume_name
+    params["mapped_db_vol"] = mydb_config.info[dbengine]["mapped_volume"]
+
+    # Create init script config
+    config_ref = create_init_script(params)
+    if config_ref is None:
+        return "Error: creating Docker Config"
+
+    # Start the service
+    service, error = swarm_util.start_service(params, config_ref)
+    if service is None:
+        return f"{error} {mydb_config.supportOrganization} has been notified"
+
+    params["Start Mesg"] = f"Started! Service_id: {service.id}"
+    params["service_id"] = service.id
+    meta_data = json.dumps(params, indent=4)
+    print(meta_data)
+
+    # Wait for service to be ready
+    time.sleep(4)
+
+    # Restore from S3
+    S3_path = aws_util.lastbackup_s3_prefix(dbname, "archive")
+    print(f"DEBUG migrate mongodb Backup location: {S3_path}")
+    result = mongo_restore(params, S3_path)
+    print(f"==== DEBUG: mongodb_util.migrate: {dbname}\n{result}")
+    return result
+
+
+def mongo_restore(dest, s3_prefix):
+    """Restore MongoDB database from S3 backup archive
+
+    MongoDB backup uses mongodump --archive which creates a single file.
+    Restore using mongorestore --archive.
+
+    return str: Result message with restore status
+    """
+    archive_url = f"{mydb_config.AWS_BUCKET_NAME}/{s3_prefix}"
+    print(f"MongoDB restore - S3 URL: {archive_url}")
+
+    # Build mongorestore command
+    restore_cmd = f"mongorestore --username {mydb_config.accounts[dbengine]['admin']} "
+    restore_cmd += f"--password {mydb_config.accounts[dbengine]['admin_pass']} "
+    restore_cmd += f"--host {mydb_config.container_host} "
+    restore_cmd += f"--port {dest['Port']} "
+    restore_cmd += f"--authenticationDatabase admin "
+    restore_cmd += f"--archive "
+
+    # Build full command with S3 pipe
+    full_command = f"aws s3 cp {archive_url} - | {restore_cmd}"
+    print(f"DEBUG: MongoDB restore command: {full_command}")
+
+    # Safe command for logging (mask password)
+    safe_command = full_command.replace(
+        mydb_config.accounts[dbengine]["admin_pass"], "********"
+    )
+
+    print(f"DEBUG: MongoDB restore command: {safe_command}")
+
+    result_msg = f"Restoring MongoDB from S3: {archive_url}\n"
+    result_msg += f"Command: {safe_command}\n\n"
+
+    try:
+        result = subprocess.run(
+            full_command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=1800,  # 30 minute timeout for large restores
+        )
+
+        if result.returncode != 0:
+            error_msg = f"Error restoring MongoDB archive:\n{result.stderr}\n"
+            print(error_msg)
+            result_msg += error_msg
+            result_msg += f"stdout: {result.stdout}\n"
+        else:
+            result_msg += f"MongoDB archive restored successfully\n"
+            result_msg += f"stdout: {result.stdout}\n"
+
+    except subprocess.TimeoutExpired:
+        return "MongoDB restore timed out after 1800 seconds.\nRestore incomplete"
+    except Exception as e:
+        return f"Unexpected error restoring MongoDB archive: {e}"
+
+    result_msg += "\nMongoDB database restore completed from S3."
+    return result_msg
 
 
 def create_mongodb(params):
@@ -154,19 +304,51 @@ def create_mongodb(params):
     return res + connection
 
 
-def backup_mongodb(dbname, type, tag=None):
-    (backupdir, backup_id) = container_util.create_backupdir(dbname)
-    (c_id, dbengine) = admin_db.get_container_type(dbname)
-    url = l = mydb_config.bucket + "/" + dbname + backupdir
-    cmd = "mongodump --username %s " % mydb_config.accounts["MongoDB"]["admin"]
-    cmd += "--password %s " % mydb_config.accounts["MongoDB"]["admin_pass"]
-    cmd += "--out /var/backup" + backupdir  # OR --archive >filename
-    admin_db.backup_log(
-        c_id, dbname, "start", backup_id, type, url="", command=cmd, err_msg=""
+def backup(info, type):
+    """Backup MongoDB database
+    use mongodump with --archive which creates a single file
+    """
+    Name = info["Name"]
+    backup_id, prefix = aws_util.create_backup_prefix(Name)
+    s3_url = f"{mydb_config.AWS_BUCKET_NAME}{prefix}"
+
+    command = f"mongodump --username {mydb_config.accounts[dbengine]['admin']} "
+    command += f"--password {mydb_config.accounts[dbengine]['admin_pass']} "
+    command += f"--host {mydb_config.container_host} --port {info['Port']} "
+    command += "--archive"
+    safe_command = command.replace(mydb_config.accounts[dbengine]["admin_pass"], "********")
+    s3_pipe = f"| aws s3 cp - {s3_url}"
+
+    message = f"\nExecuting Mongo backup to S3: {mydb_config.AWS_BUCKET_NAME}\n"
+    message += f"Executing: {safe_command}\n"
+    message += f"     to: {s3_url}archive\n"
+    admin_db.backup_log(info["cid"], Name, "start", backup_id, type, url="", command=command, err_msg="")
+    full_command = command + s3_pipe + "archive"
+    result = subprocess.run(full_command, shell=True, capture_output=True)
+    if result.returncode != 0:
+        message += f"\nDatabase: {Name}\n"
+        message += f"Command: {command}\n"
+        message += f"Error: {result.stderr}\n"
+        message += f"Backup exit code {result.returncode}"
+    else:
+        message += f"\nDatabase: {Name} written to: {s3_url}archive\n"
+    admin_db.backup_log(info["cid"], Name, "end", backup_id, type, s3_url, command, msg)
+    return message
+
+
+def setup_parser():
+    parser = argparse.ArgumentParser(
+        description="Mongo CLI testing",
+        usage="%(prog)s [options] module_name",
     )
-    result = container_util.exec_command(dbname, cmd)
-    admin_db.backup_log(c_id, dbname, "end", backup_id, type, url, cmd, result)
-    result = container_util.exec_command(dbname, cmd)
-    admin_db.backup_log(c_id, dbname, "end", backup_id, type, url, cmd, result)
-    admin_db.backup_log(c_id, dbname, "end", backup_id, type, url, cmd, result)
-    return cmd, result
+    parser.add_argument(
+        "--test-init", action="store_true", required=False, help="test SQL init script"
+    )
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    from . import test_params
+
+    params = test_params.get_test_params()
+    args = setup_parser()

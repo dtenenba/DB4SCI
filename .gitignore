@@ -1,0 +1,28 @@
+*.pyc
+.aws
+.env
+nohup.out
+*.key
+*.cert
+*.crt
+*.pem
+prod/nginx/mydb.conf
+.idea/*
+test/*
+requirements.docker-ce
+env_setup.sh
+mydb/mydb_config.py
+Extras
+__pycache__/
+
+# Organization-specific branding (replace with your own)
+# Keep db4sci-logo.svg as default, add your own custom logos here
+mydb/static/favicon.ico
+dbaas_resolved.yml
+
+# Organization-specific container templates and scripts
+mydb/compose_scripts/
+mydb/compose_templates/
+mydb/dbinit_scripts/
+mydb/test_params.py
+setup.cfg

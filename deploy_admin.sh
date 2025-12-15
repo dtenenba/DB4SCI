@@ -3,6 +3,8 @@ set -a
 source .env
 set +a
 
+# Start the admin_db services
+
 prefix=mydb
 mydb_services='admin_db migrate_db'
 

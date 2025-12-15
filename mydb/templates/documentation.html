@@ -9,9 +9,9 @@
   <div class="document">
     <h2>Overview</h2>
     <p>
-    DBaaS allows FHCRC faculty and staff to create stand
+    DBaaS allows {{organizationName}} faculty and staff to create stand
     alone database instances. The database instances are created in docker containers 
-    on a shared server managed by scicomp. You will not have direct access to the file
+    on a shared server managed by {{supportOrganization}}. You will not have direct access to the file
     system but you will have superuser permissions to the database instance.
     <b>Current support for these database servers is minimal. </b>
     We will back up your databases, allowing for recovery with data loss of up to 24 hours. We 
@@ -20,49 +20,63 @@
 
     <h2> Creating a database instance</h2>
     <p>
-    A dropdown will apear when you hover over <b>"Create DB Container"</b> from the main 
-    DBaas page. The dropdown shows the different databae engines that are available.
-                    Select one by clicking on its name.
-                    Within each create screen you will have the option to select a particluar version of the
-                    database. New database engines and updated versions will be made available.
- 
-                    In the web form we have provided default/recommended values where possible. 
-                    These defaults can be altered in the form but at this time: <p>
-		        <li> Only basic support level is provided
-                        <li> Support is available only during business hours
-                        <li> Point in time recovery is not supported 
-                        <li> Backups are done nightly 
-                        <li> Offsite backups are not removed <p>
+    A dropdown will appear when you hover over <b>"Create DB Container"</b> from the main
+    DBaas page. The dropdown shows the different database engines that are available.
+    Select one by clicking on its name.
+    Within each create screen you will have the option to select a particular version of the
+    database. New database engines and updated versions will be made available.
 
-    If you have questions about database configuration options and defaults, contact scicomp. <p>
+    In the web form we have provided default/recommended values where possible.
+    These defaults can be altered in the form but at this time:
+    </p>
+    <ul>
+        <li> Only basic support level is provided
+        <li> Support is available only during business hours
+        <li> Point in time recovery is not supported
+        <li> Backups are done nightly
+        <li> Offsite backups are purged after {{ backup_purge_period }} days
+    </ul>
+    <p>
+    If you have questions about database configuration options and defaults,
+    contact {{supportOrganization}}.
 
-    When you submit this form, a database container will be created with the name in <b>"DB/Container Name"</b>
-    field. The default database name will match the container name. The <b>"DB Username"</b> and 
-    <b>"DB password"</b> are used to create a database account which will have root privliages for the DB.
-    As the root user you will be able to create other user accounts and grand premissions.
-    The <b>"Contact Name"</b> and <b>"Contact Email"</b> are the name and email, respectively, of the 
-    person or group that Scientific Computing can contact in case of outages or changes to the system. <p>
+    <p>
+    The <b>Create DB Service</b> form prompts for a <b>Docker Service Name</b> and <b>Database Name</b>.
+    The <b>Database Name</b> will be the actual name of the database of the DBengine you select.
+    The <b>Docker Service Name</b> must be unique and is used to name the Docker service object.
+    This allows developers to have two containers with the same database name for production
+    and development.
 
-    A secondary root account is created by Scicomp for the purpose of performing backups.
+    <p>
+    The <b>Database Username</b> will be the login user name for connecting to the database. It
+    defaults to your user name, but it can be changed. The <b>Database Username</b> will have full
+    administrative rights to the database, so additional accounts can be created if needed.
+
+    <b>"DB password"</b> are used to create a database account which will have root privileges for the DB.
+    It is strongly recommended that you do not use your {{organizationName}} password for the database
+    account. 
+
+    A secondary root account is created by {{supportOrganization}} for the purpose of performing backups.
 
     <h2> Backups </h2>
-                    Nightly full backups are made of your database. The full backups are available locally for a few days.
-                    Full backups are copied to Amazon S2. You can list your offsite backups from the main menu with
-                    <b>"List S3 Backups"</b>. Database owners can create there own backups using native methods to the 
-                    backup engine, or using the <b>"Backup DB Now"</b> command from the main menue.
+    Backups are performed after hours nightly if you select the <b>Daily</b> or <b>Weekly</b>
+    backup option.
+    All backups are written to Amazon S3. You can list your offsite backups from the main menu with
+    <b>"List S3 Backups"</b>. Database owners can create their own backups using native methods to the
+    backup engine, or using the <b>"Backup DB Now"</b> command from the <b>Manage Services</b> menu.
 
-    <h2> Deleting existing postgres container </h2>
+    <h2> Deleting existing container </h2>
     <p>
-    There is a link to "Delete DB Container." This will remove the docker container where the database runs,
-    but will not delete the data directory.
-    Scicomp manually deletes those files 10 days after the deletion of the container. If you contact scicomp before that time,
-    we can recreate the container very easily. If you contact scicomp to restore a deleted container after 10 days, 
-    it will take time to restore the databases and may result in data loss. NOTE: in order
-    to delete a container, you will need a superuser login and password on the database server.
+    The <b>Manage Services</b> menu has a <b>Delete Service</b> function.
+    This will remove the docker container where the database runs, and its associated storage and
+    configuration information. If backups were created they will age with the purge period and
+    will eventually be gone.
+    <b>Delete Service</b> requires proper database credentials, you will be prompted for
+    username and password. 
 
     <h2> Additional functionality or bugs </h2>
     <p>
-    Please report any bugs or submit requests for additional functionality by contacting {{ supportEmail }} 
+    Please report any bugs or submit requests for additional functionality by contacting {{ supportEmail }}.
   </div>
 </div>
 {% endblock %}

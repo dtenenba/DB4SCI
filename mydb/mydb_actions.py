@@ -1,32 +1,14 @@
-import os
-import time
-
 from flask import render_template, session
 
 from . import (
     admin_db,
     mariadb_util,
     migrate_db,
+    mongodb_util,
     mydb_config,
     postgres_util,
     swarm_util,
 )
-
-# import mongodb_util
-
-
-def create_backup_prefix(Name):
-    """Create prefix for aws s3 backup
-    Returns: (backup_id, prefix)
-    backup_id format: YYYY-MM-DD_HH:MM:SS
-    prefix format: /Name/YYYY-MM-DD_HH:MM:SS/
-    """
-    t = time.localtime()
-    backup_id = f"{t[0]}-{t[1]:02d}-{t[2]:02d}_{t[3]:02d}:{t[4]:02d}:{t[5]:02d}"
-    # prefix = f"/{mydb_config.s3_prefix}/{Name}/{backup_id}/"
-    prefix = f"/dev/{Name}/{backup_id}/"
-
-    return backup_id, prefix
 
 
 def admin_actions(action, args):
@@ -50,7 +32,7 @@ def admin_actions(action, args):
             result = mariadb_util.restore(info)
         else:
             result = f"Restore not implemented for {dbengine}."
-    elif action == "remove":
+    elif action == "delete":
         result = swarm_util.admin_delete(container_name, session["username"])
         header = "Remove Service"
     elif action == "connection":
@@ -96,6 +78,8 @@ def migrate_actions(action, args):
             result = postgres_util.migrate(info)
         elif dbengine == "MariaDB":
             result = mariadb_util.migrate(info)
+        elif dbengine == "MongoDB":
+            result = mongodb_util.migrate(info)
         else:
             result = f"Migration not implemented for {dbengine}"
         return render_template(
@@ -152,26 +136,6 @@ def user_backup(Name):
     return result
 
 
-def list_s3(container_name):
-    """return list of backup prefixes for a container.
-    Note each prefix is PIT backup date, the backup files are
-    in the PIT
-    """
-    aws_bucket = os.getenv("AWS_BUCKET")
-    cmd = f"{mydb_config.aws} s3 ls --recursive {aws_bucket}/{container_name}"
-    print(f"DEBUG: {__file__}.selecte list_s3 cmd: {cmd}")
-    backups = os.popen(cmd).read().strip()
-    return backups
-
-
-def list_s3_prefixes(container_name):
-    aws_bucket = os.getenv("AWS_BUCKET")
-    cmd = f"{mydb_config.aws} s3 ls {aws_bucket}/{container_name}/"
-    backups = os.popen(cmd).read().strip()
-    lines = backups.split("\n")
-    return lines
-
-
 def container_info(container_name, admin):
     """Query database for container info
 
@@ -219,12 +183,10 @@ def restart_con(con_name, dbuser, dbuserpass, username, admin_log=True):
     auth = False
     if dbengine == "Postgres":
         auth = postgres_util.auth_check(dbuser, dbuserpass, port)
-    elif dbengine == "MongoDB":
-        auth = mongodb_util.auth_mongodb(dbuser, dbuserpass, port)
     elif dbengine == "MariaDB":
         auth = mariadb_util.auth_mariadb(dbuser, dbuserpass, port)
-    elif dbengine == "Neo4j":
-        auth = neo4j_util.auth_check(dbuser, dbuserpass, port)
+    elif dbengine == "MongoDB":
+        auth = mongodb_util.auth_mongodb(dbuser, dbuserpass, port)
     else:
         return "Error: Container type not found."
     if auth:
@@ -255,10 +217,10 @@ def auth_delete(Name, dbuser, dbuserpass, username):
     auth = False
     if dbengine == "Postgres":
         auth = postgres_util.auth_check(dbuser, dbuserpass, port)
-    elif dbengine == "MongoDB":
-        auth = mongodb_util.auth_mongodb(dbuser, dbuserpass, port, info["dbname"])
     elif dbengine == "MariaDB":
         auth = mariadb_util.auth_mariadb(dbuser, dbuserpass, port)
+    elif dbengine == "MongoDB":
+        auth = mongodb_util.auth_mongodb(dbuser, dbuserpass, port)
     else:
         return "Error: Container type not found"
     if auth:
